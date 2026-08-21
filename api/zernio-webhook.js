@@ -5,50 +5,41 @@ const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-module.exports = async (req, res) => {
-  // Solo POST
+async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
+    res.status(405).json({ error: 'Method Not Allowed' });
+    return;
   }
 
   try {
     const data = req.body;
-
-    console.log('Webhook de Zernio recibido:', data);
-
     const { contact, message, platform, timestamp, direction } = data;
 
     if (!contact || !message) {
-      return res.status(400).json({ error: 'Faltan datos requeridos' });
+      res.status(400).json({ error: 'Faltan datos' });
+      return;
     }
 
-    // Guardar en Supabase
-    const { data: saved, error } = await supabase
+    const { error } = await supabase
       .from('bulldog_mensajes_zernio')
-      .insert([
-        {
-          phone: contact.phone || contact,
-          mensaje: message,
-          plataforma: platform || 'whatsapp',
-          tipo: direction === 'incoming' ? 'entrada' : 'salida',
-          timestamp: timestamp || new Date().toISOString(),
-          raw_data: data
-        }
-      ]);
+      .insert([{
+        phone: contact.phone || contact,
+        mensaje: message,
+        plataforma: platform || 'whatsapp',
+        tipo: direction === 'incoming' ? 'entrada' : 'salida',
+        timestamp: timestamp || new Date().toISOString(),
+        raw_data: data
+      }]);
 
     if (error) {
-      console.error('Error guardando en Supabase:', error);
-      return res.status(500).json({ error: error.message });
+      res.status(500).json({ error: error.message });
+      return;
     }
 
-    return res.status(200).json({ 
-      ok: true, 
-      message: 'Mensaje guardado',
-      saved 
-    });
-
-  } catch (error) {
-    console.error('Error en webhook:', error);
-    return res.status(500).json({ error: error.message });
+    res.status(200).json({ ok: true, message: 'Guardado' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-};
+}
+
+module.exports = handler;
