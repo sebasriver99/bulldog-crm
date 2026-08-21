@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bulldog CRM - Webhooks Zernio 🌭</title>
+  <style>
+    :root {
+      --primary: #FF6B35;
+      --primary-dark: #E55A25;
+      --bg: #0D1117;
+      --panel: #161B22;
+      --surface: #1C2333;
+      --border: rgba(255, 255, 255, .07);
+      --text: #E6EDF3;
+      --text-muted: #7D8590;
+      --success: #3FB950;
+      --warn: #D29922;
+      --danger: #F85149;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; }
+    
+    #app { display: grid; grid-template-columns: 220px 1fr 340px; height: 100vh; }
+
+    .sidebar { background: var(--panel); border-right: 1px solid var(--border); padding: 20px 0; display: flex; flex-direction: column; }
+    .sidebar-header { padding: 0 16px 20px; border-bottom: 1px solid var(--border); }
+    .sidebar-logo { font-size: 24px; font-weight: 700; }
+    .sidebar-info { font-size: 11px; color: var(--text-muted); margin-top: 8px; }
+    .menu-item { padding: 12px 16px; margin: 0 12px; border-radius: 8px; cursor: pointer; font-size: 13px; background: none; border: none; color: var(--text-muted); width: calc(100% - 24px); text-align: left; transition: all .2s; display: flex; align-items: center; gap: 8px; }
+    .menu-item:hover { background: var(--surface); color: var(--text); }
+    .menu-item.active { background: rgba(255, 107, 53, .15); color: var(--primary); }
+
+    .center { display: grid; grid-template-columns: 280px 1fr; border-right: 1px solid var(--border); overflow: hidden; }
+    .chats-list { background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+    .chats-header { padding: 12px; border-bottom: 1px solid var(--border); display: flex; gap: 6px; }
+    .chats-search { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text); font-size: 13px; outline: none; }
+    .refresh-btn { background: var(--primary); color: #fff; border: none; border-radius: 6px; padding: 8px 10px; cursor: pointer; font-size: 12px; }
+    .chats-scroll { flex: 1; overflow-y: auto; }
+    .chat-item { padding: 12px; border-bottom: 1px solid var(--border); cursor: pointer; border-left: 3px solid transparent; transition: background .2s; }
+    .chat-item:hover { background: var(--surface); }
+    .chat-item.active { background: var(--surface); border-left-color: var(--primary); }
+    .chat-name { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .chat-preview { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .chat-view { display: flex; flex-direction: column; background: var(--bg); }
+    .chat-header { padding: 16px; border-bottom: 1px solid var(--border); background: var(--panel); }
+    .chat-title { font-size: 14px; font-weight: 600; }
+    .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .msg { display: flex; gap: 8px; }
+    .msg.out { justify-content: flex-end; }
+    .msg-bubble { max-width: 65%; padding: 10px 12px; border-radius: 12px; font-size: 12px; line-height: 1.4; word-wrap: break-word; }
+    .msg.in .msg-bubble { background: var(--surface); }
+    .msg.out .msg-bubble { background: var(--primary); color: #fff; }
+    .msg-time { font-size: 10px; color: var(--text-muted); text-align: center; margin: 8px 0; }
+    .empty-state { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); font-size: 13px; }
+
+    .right-panel { background: var(--panel); display: flex; flex-direction: column; overflow: hidden; }
+    .panel-tabs { display: flex; border-bottom: 1px solid var(--border); gap: 0; }
+    .panel-tab { flex: 1; padding: 12px; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 12px; font-weight: 600; border-bottom: 2px solid transparent; transition: all .2s; }
+    .panel-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .panel-content { flex: 1; overflow-y: auto; padding: 16px; }
+    .panel-tab-content { display: none; }
+    .panel-tab-content.active { display: block; }
+    .section-title { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px; }
+    .metric { background: var(--surface); border-radius: 6px; padding: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; font-size: 12px; }
+    .badge { display: inline-block; background: var(--primary); color: #fff; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; }
+
+    #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, .8); color: #fff; padding: 12px 20px; border-radius: 8px; font-size: 12px; opacity: 0; transition: opacity .3s; z-index: 1000; }
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">🌭 Bulldog</div>
+      <div class="sidebar-info">
+        <div>Ibagué</div>
+        <div style="margin-top:4px;"><span style="display:inline-block;width:8px;height:8px;background:var(--success);border-radius:50%;margin-right:4px;"></span><span id="status">Conectando...</span></div>
+      </div>
+    </div>
+    <button class="menu-item active" onclick="switchView('chats')">💬 Chats</button>
+    <button class="menu-item" onclick="switchView('dashboard')">📊 Dashboard</button>
+  </div>
+
+  <div class="center">
+    <div class="chats-list">
+      <div class="chats-header">
+        <input type="text" class="chats-search" id="search-input" placeholder="Buscar..." onkeyup="filterChats()">
+        <button class="refresh-btn" onclick="loadChats()">🔄</button>
+      </div>
+      <div class="chats-scroll" id="chats-list">
+        <div style="text-align:center;color:var(--text-muted);padding:20px;font-size:12px;">Esperando mensajes...</div>
+      </div>
+    </div>
+
+    <div class="chat-view">
+      <div class="chat-header">
+        <div class="chat-title" id="chat-title">Selecciona un chat</div>
+      </div>
+      <div class="chat-messages" id="chat-messages">
+        <div class="empty-state">Sin mensajes</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="right-panel">
+    <div class="panel-tabs">
+      <button class="panel-tab active" onclick="switchTab('stats')">📊 Stats</button>
+      <button class="panel-tab" onclick="switchTab('info')">ℹ️ Info</button>
+    </div>
+
+    <div class="panel-content">
+      <div class="panel-tab-content active" id="stats-tab">
+        <div class="section-title">Estadísticas</div>
+        <div class="metric">
+          <span>📱 Total Mensajes</span>
+          <span style="font-weight:600;color:var(--primary);" id="total-msgs">0</span>
+        </div>
+        <div class="metric">
+          <span>💬 Chats Activos</span>
+          <span style="font-weight:600;color:var(--primary);" id="total-chats">0</span>
+        </div>
+        <div class="metric">
+          <span>📥 Entrantes</span>
+          <span style="font-weight:600;color:var(--primary);" id="incoming-msgs">0</span>
+        </div>
+        <div class="metric">
+          <span>📤 Salientes</span>
+          <span style="font-weight:600;color:var(--primary);" id="outgoing-msgs">0</span>
+        </div>
+      </div>
+
+      <div class="panel-tab-content" id="info-tab">
+        <div class="section-title">Webhook Setup</div>
+        <div style="background:var(--surface);border-radius:6px;padding:12px;font-size:11px;line-height:1.6;">
+          <strong>URL para Zernio:</strong><br>
+          <code style="background:#0D1117;padding:8px;display:block;margin-top:8px;border-radius:4px;word-break:break-all;">
+            https://bulldog-hotdog-ibague.netlify.app/.netlify/functions/zernio-webhook
+          </code>
+          <br>
+          <strong>Eventos a activar:</strong><br>
+          • Mensajes WhatsApp<br>
+          • Mensajes recibidos<br>
+          • Mensajes enviados
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+const SUPABASE_URL = 'https://ahojqvstnhwtiqndwiut.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFob2pxdnN0bmh3dGlxbmR3aXV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzAxNzA2NjUsImV4cCI6MjA0NTc0NjY2NX0.qx5hH23U7c2-6CXSPcsB_VqsF0k5dwANrGKIVxUqEE0';
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let state = {
+  chats: {},
+  allChats: [],
+  activeChat: null,
+  messages: []
+};
+
+window.addEventListener('load', () => {
+  loadChats();
+  setInterval(loadChats, 2000);
+  subscribeToMessages();
+});
+
+async function subscribeToMessages() {
+  supabase
+    .channel('bulldog_mensajes_zernio')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bulldog_mensajes_zernio' }, (payload) => {
+      console.log('Nuevo mensaje:', payload);
+      loadChats();
+    })
+    .subscribe();
+}
+
+async function loadChats() {
+  try {
+    const { data, error } = await supabase
+      .from('bulldog_mensajes_zernio')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+
+    state.messages = data || [];
+    state.chats = {};
+
+    state.messages.forEach(msg => {
+      const phone = msg.phone;
+      if (!state.chats[phone]) {
+        state.chats[phone] = {
+          phone,
+          name: `Cliente: +${phone}`,
+          messages: []
+        };
+      }
+      state.chats[phone].messages.push({
+        content: msg.mensaje,
+        fromMe: msg.tipo === 'salida',
+        timestamp: msg.timestamp || msg.created_at
+      });
+    });
+
+    state.allChats = Object.values(state.chats);
+    renderChats();
+    updateStats();
+
+    document.getElementById('status').textContent = '✓ Conectado';
+  } catch (e) {
+    console.error('Error:', e);
+    document.getElementById('status').textContent = '✗ Error';
+  }
+}
+
+function renderChats() {
+  const list = document.getElementById('chats-list');
+  if (!state.allChats.length) {
+    list.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:20px;">Esperando mensajes...</div>';
+    return;
+  }
+
+  list.innerHTML = state.allChats.map(chat => `
+    <div class="chat-item ${state.activeChat?.phone === chat.phone ? 'active' : ''}" onclick="openChat('${chat.phone}')">
+      <div class="chat-name">${chat.name}</div>
+      <div class="chat-preview">${chat.messages[chat.messages.length - 1]?.content?.slice(0, 40) || 'Sin mensajes'}</div>
+    </div>
+  `).join('');
+}
+
+function openChat(phone) {
+  const chat = state.chats[phone];
+  if (!chat) return;
+
+  state.activeChat = chat;
+  document.getElementById('chat-title').textContent = chat.name;
+
+  let html = '';
+  chat.messages.forEach(m => {
+    const time = new Date(m.timestamp).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+    html += `
+      <div class="msg ${m.fromMe ? 'out' : 'in'}">
+        <div class="msg-bubble">${m.content}<div style="font-size:10px;opacity:.7;margin-top:4px;">${time}</div></div>
+      </div>
+    `;
+  });
+  document.getElementById('chat-messages').innerHTML = html || '<div class="empty-state">Sin mensajes</div>';
+  document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;
+
+  document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+  event.target.closest?.('.chat-item')?.classList.add('active');
+}
+
+function updateStats() {
+  document.getElementById('total-msgs').textContent = state.messages.length;
+  document.getElementById('total-chats').textContent = state.allChats.length;
+  
+  const incoming = state.messages.filter(m => m.tipo === 'entrada').length;
+  const outgoing = state.messages.filter(m => m.tipo === 'salida').length;
+  
+  document.getElementById('incoming-msgs').textContent = incoming;
+  document.getElementById('outgoing-msgs').textContent = outgoing;
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.panel-tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.panel-tab').forEach(el => el.classList.remove('active'));
+  document.getElementById(tab + '-tab').classList.add('active');
+  event.target.classList.add('active');
+}
+
+function switchView(view) {
+  document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+function filterChats() {
+  const q = document.getElementById('search-input').value.toLowerCase();
+  const filtered = state.allChats.filter(chat => chat.name.toLowerCase().includes(q) || chat.phone.includes(q));
+  const list = document.getElementById('chats-list');
+  list.innerHTML = filtered.map(chat => `
+    <div class="chat-item" onclick="openChat('${chat.phone}')">
+      <div class="chat-name">${chat.name}</div>
+      <div class="chat-preview">${chat.messages[chat.messages.length - 1]?.content?.slice(0, 40) || 'Sin mensajes'}</div>
+    </div>
+  `).join('');
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2000);
+}
+</script>
+
+</body>
+</html>
