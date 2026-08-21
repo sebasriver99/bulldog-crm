@@ -6,45 +6,42 @@ const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function handler(req, res) {
-  console.log('Webhook recibido:', JSON.stringify(req.body, null, 2));
-  
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
+    return res.status(200).json({ ok: true });
   }
 
   try {
-    const data = req.body;
+    let data = req.body || {};
     
-    // Extraer datos de CUALQUIER formato
-    let phone = data?.contact?.phone || data?.phone || data?.numero || 'unknown';
-    let message = data?.message || data?.mensaje || data?.text || JSON.stringify(data);
-    let direction = data?.direction || data?.tipo || 'incoming';
-    
-    console.log('Parsed:', { phone, message, direction });
+    if (typeof data === 'string') {
+      try {
+        data = JSON.parse(data);
+      } catch (e) {
+        data = { raw: data };
+      }
+    }
 
-    // Guardar en Supabase
+    let phone = data?.contact?.phone || data?.phone || data?.numero || data?.from || 'unknown';
+    let message = data?.message || data?.mensaje || data?.text || data?.body || JSON.stringify(data).substring(0, 100);
+
+    phone = String(phone).replace(/\D/g, '').slice(-10) || 'unknown';
+    message = String(message).substring(0, 500);
+
     const { error } = await supabase
       .from('bulldog_mensajes_zernio')
       .insert([{
-        phone: String(phone),
-        mensaje: String(message).substring(0, 500),
+        phone,
+        mensaje: message,
         plataforma: 'whatsapp',
-        tipo: direction === 'incoming' || direction === 'entrada' ? 'entrada' : 'salida',
+        tipo: 'entrada',
         timestamp: new Date().toISOString(),
         raw_data: data
       }]);
 
-    if (error) {
-      console.error('Supabase error:', error);
-      return res.status(500).json({ error: error.message });
-    }
-
-    console.log('Mensaje guardado exitosamente');
-    return res.status(200).json({ ok: true, message: 'Guardado' });
-    
+    return res.status(200).json({ ok: true });
   } catch (err) {
     console.error('Error:', err);
-    return res.status(500).json({ error: err.message });
+    return res.status(200).json({ ok: true });
   }
 }
 
