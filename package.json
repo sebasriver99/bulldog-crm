@@ -1,0 +1,8 @@
+{
+  "name": "bulldog-crm",
+  "version": "1.0.0",
+  "description": "Bulldog CRM - Webhooks Zernio",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.38.0"
+  }
+}
